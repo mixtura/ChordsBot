@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Parser.Common;
 using Parser.Interfaces;
 
-namespace Parser.Implementation.CrawlerVersion2
+namespace Parser.Implementation
 {
     public class WebPageCrawler : IWebPageCrawler
     {

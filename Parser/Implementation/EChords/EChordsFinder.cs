@@ -70,7 +70,7 @@ namespace Parser.Implementation.EChords
         {
             var webPageLoader = new DefaultWebPageLoader();
 
-            return await new CrawlerVersion2.WebPageCrawler(webPageLoader)
+            return await new WebPageCrawler(webPageLoader)
                 .Navigate(new Uri(_echordsUrl, $"/search-all/{query}"), new EChordsSearchResults())
                 .Navigate(x => x.FirstOrDefault(), new EChordsPage())
                 .GetResult();
