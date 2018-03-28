@@ -1,68 +1,100 @@
-﻿//using System;
-//using System.Threading.Tasks;
-//using Parser.Interfaces;
+﻿using System;
+using System.Threading.Tasks;
+using Parser.Common;
+using Parser.Interfaces;
 
-//namespace Parser.Implementation
-//{
-//    internal class WebPageCrawler : IWebPageCrawler
-//    {
-//        private readonly IWebPageLoader _webPageLoader;
+namespace Parser.Implementation.CrawlerVersion2
+{
+    public class WebPageCrawler : IWebPageCrawler
+    {
+        private readonly IWebPageLoader _webPageLoader;
 
-//        public WebPageCrawler(IWebPageLoader webPageLoader)
-//        {
-//            _webPageLoader = webPageLoader;
-//        }
+        public WebPageCrawler(IWebPageLoader webPageLoader)
+        {
+            _webPageLoader = webPageLoader;
+        }
 
-//        public IWebPageCrawler<T> Navigate<T>(string url, IContentExtractStrategy<T> contentExtractStrategy)
-//        {
-//            return Navigate(url, contentExtractStrategy.ExtractData);
-//        }
+        public IWebPageCrawler<TNext> Navigate<TNext>(Uri url, IContentExtractStrategy<TNext> contentExtractStrategy)
+        {
+            return new WebPageCrawler<TNext>(_webPageLoader, url, contentExtractStrategy.ExtractData);
+        }
 
-//        public IWebPageCrawler<T> Navigate<T>(string url, Func<string, T> contentExtractStrategy)
-//        {
-//            var webPage = _webPageLoader.Load(new Uri(url));
-            
-//            return new WebPageCrawler<T>(_webPageLoader, async () => contentExtractStrategy(await webPage));
-//        }
-//    }
+        public IWebPageCrawler<TNext> Navigate<TNext>(Uri url, Func<string, Result<TNext>> contentExtractStrategy)
+        {
+            return new WebPageCrawler<TNext>(_webPageLoader, url, contentExtractStrategy);
+        }
+    }
 
-//    internal class WebPageCrawler<T> : WebPageCrawler, IWebPageCrawler<T>
-//    {
-//        private readonly Func<Task<T>> _previousResult;
-//        private readonly IWebPageLoader _webPageLoader;
+    internal class WebPageCrawler<T> : IWebPageCrawler<T>
+    {
+        private readonly IWebPageLoader _webPageLoader;
+        private readonly Func<string, Result<T>> _contentExtractStrategy;
+        private readonly Uri _url;
 
-//        public WebPageCrawler(IWebPageLoader loader, Func<Task<T>> previousResult) 
-//            : base(loader)
-//        {
-//            _webPageLoader = loader;
-//            _previousResult = previousResult;
-//        }
+        public WebPageCrawler(IWebPageLoader webPageLoader, Uri url, Func<string, Result<T>> contentExtractStrategy)
+        {
+            _url = url;
+            _contentExtractStrategy = contentExtractStrategy;
+            _webPageLoader = webPageLoader;
+        }
+        
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, IContentExtractStrategy<TNext> contentExtractStrategy)
+        {
+            return Navigate(url, contentExtractStrategy.ExtractData);
+        }
 
-//        public IWebPageCrawler<T2> Navigate<T2>(Func<T, Uri> urlFn, IContentExtractStrategy<T2> contentExtractStrategy)
-//        {
-//            return Navigate(urlFn, contentExtractStrategy.ExtractData);
-//        }
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, Func<string, Result<TNext>> contentExtractStrategy)
+        {
+            return new WebPageCrawler<TNext, T>(_webPageLoader, url, contentExtractStrategy, this);
+        }
 
-//        public IWebPageCrawler<T2> Navigate<T2>(Func<T, Uri> urlFn, Func<string, T2> contentExtractStrategy)
-//        {
-//            return new WebPageCrawler<T2>(_webPageLoader, async () =>
-//            {
-//                var previousResult = await _previousResult();
-//                var url = urlFn(previousResult);
+        public async Task<Result<T>> GetResult()
+        {
+            var page = await _webPageLoader.Load(_url);
+            var content = page.Bind(x => _contentExtractStrategy(x));
 
-//                if (url == null || previousResult == null)
-//                {
-//                    return await Task.FromResult(default(T2));
-//                }
+            return content;
+        }
+    }
 
-//                var webPage = await _webPageLoader.Load(url);
-//                return contentExtractStrategy(webPage);
-//            });
-//        }
+    internal class WebPageCrawler<T, TPrevious> : IWebPageCrawler<T>
+    {
+        private readonly IWebPageLoader _webPageLoader;
+        private readonly IWebPageCrawler<TPrevious> _previous;
+        private readonly Func<string, Result<T>> _contentExtractStrategy;
+        private readonly Func<TPrevious, Uri> _urlExtractor;
 
-//        public async Task<T> GetResult()
-//        {
-//            return await _previousResult();
-//        }
-//    }
-//}
+        public WebPageCrawler(
+            IWebPageLoader webPageLoader, 
+            Func<TPrevious, Uri> url, 
+            Func<string, Result<T>> contentExtractStrategy, 
+            IWebPageCrawler<TPrevious> previous)
+        {
+            _urlExtractor = url;
+            _contentExtractStrategy = contentExtractStrategy;
+            _previous = previous;
+            _webPageLoader = webPageLoader;
+        }
+
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> urlExtractor, IContentExtractStrategy<TNext> contentExtractStrategy)
+        {
+            return Navigate(urlExtractor, contentExtractStrategy.ExtractData);
+        }
+
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> urlExtractor, Func<string, Result<TNext>> contentExtractStrategy)
+        {
+            return new WebPageCrawler<TNext, T>(_webPageLoader, urlExtractor, contentExtractStrategy, this);
+        }
+
+        public async Task<Result<T>> GetResult()
+        {
+            var previous = await _previous.GetResult();
+
+            var result = await previous
+                .Bind(x => _urlExtractor(x).Return())
+                .Bind(async x => await _webPageLoader.Load(x));
+ 
+            return result.Bind(_contentExtractStrategy);
+        }
+    }
+}
