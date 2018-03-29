@@ -8,7 +8,7 @@ namespace Parser.Interfaces
 
     public interface IWebPageCrawler<T> : IWebPageCrawler
     {
-        IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, IContentExtractStrategy<TNext> contentExtractStrategy);
+        IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, IDataExtractor<TNext> dataExtractor);
         IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, Func<string, Result<TNext>> contentExtractStrategy);
         Task<Result<T>> GetResult();
     }

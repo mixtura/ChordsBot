@@ -14,9 +14,9 @@ namespace Parser.Implementation
             _webPageLoader = webPageLoader;
         }
 
-        public IWebPageCrawler<TNext> Navigate<TNext>(Uri url, IContentExtractStrategy<TNext> contentExtractStrategy)
+        public IWebPageCrawler<TNext> Navigate<TNext>(Uri url, IDataExtractor<TNext> dataExtractor)
         {
-            return new WebPageCrawler<TNext>(_webPageLoader, url, contentExtractStrategy.ExtractData);
+            return new WebPageCrawler<TNext>(_webPageLoader, url, dataExtractor.ExtractData);
         }
 
         public IWebPageCrawler<TNext> Navigate<TNext>(Uri url, Func<string, Result<TNext>> contentExtractStrategy)
@@ -38,9 +38,9 @@ namespace Parser.Implementation
             _webPageLoader = webPageLoader;
         }
         
-        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, IContentExtractStrategy<TNext> contentExtractStrategy)
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, IDataExtractor<TNext> dataExtractor)
         {
-            return Navigate(url, contentExtractStrategy.ExtractData);
+            return Navigate(url, dataExtractor.ExtractData);
         }
 
         public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> url, Func<string, Result<TNext>> contentExtractStrategy)
@@ -76,9 +76,9 @@ namespace Parser.Implementation
             _webPageLoader = webPageLoader;
         }
 
-        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> urlExtractor, IContentExtractStrategy<TNext> contentExtractStrategy)
+        public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> urlExtractor, IDataExtractor<TNext> dataExtractor)
         {
-            return Navigate(urlExtractor, contentExtractStrategy.ExtractData);
+            return Navigate(urlExtractor, dataExtractor.ExtractData);
         }
 
         public IWebPageCrawler<TNext> Navigate<TNext>(Func<T, Uri> urlExtractor, Func<string, Result<TNext>> contentExtractStrategy)

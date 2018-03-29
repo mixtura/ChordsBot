@@ -2,7 +2,7 @@
 
 namespace Parser.Interfaces
 {
-    public interface IContentExtractStrategy<T>
+    public interface IDataExtractor<T>
     {
         Result<T> ExtractData(string content);
     }
