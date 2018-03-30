@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace ChordsBot.Api
 {
@@ -33,21 +34,12 @@ namespace ChordsBot.Api
             var correctToken = Options.Token;
             var routeData = Context.GetRouteData();
 
-            if (routeData.Values.ContainsKey(TelegramTokenName))
+            if(routeData.Values.TryGetValue(TelegramTokenName, out object tokenFromRoute) ||
+                Request.Query.TryGetValue(TelegramTokenName, out StringValues tokenFromQuery)) 
             {
-                var token = (string)routeData.Values[TelegramTokenName];
-
-                if (correctToken.Equals(token, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    return Task.FromResult(Success());
-                }
-            }
-
-            if (Request.Query.ContainsKey(TelegramTokenName))
-            {
-                var token = (string) Request.Query[TelegramTokenName];
-
-                if (correctToken.Equals(token, StringComparison.CurrentCultureIgnoreCase))
+                var token = tokenFromRoute ?? tokenFromQuery;
+                
+                if (correctToken.Equals(token.ToString(), StringComparison.CurrentCultureIgnoreCase))
                 {
                     return Task.FromResult(Success());
                 }
