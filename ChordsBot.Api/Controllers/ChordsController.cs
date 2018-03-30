@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Parser.Common;
 using Parser.Interfaces;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -10,23 +11,25 @@ using Telegram.Bot.Types.Enums;
 
 namespace ChordsBot.Api.Controllers
 {
-    [Route("api/chordsBot")]
+    [Route("api/chords/[action]")]
     [Authorize(AuthenticationSchemes = "TelegramAuthScheme")]
-    public class ChordsBotController : Controller
+    public class ChordsController : Controller
     {
         private readonly ITelegramBotClient _botClient;
-        private readonly ICollection<IChordsFinder> _chordsFinders;
+        private readonly IChordsService _chordsService;
+        private readonly IChordsFormatter _chordsFormatter;
         
-        public ChordsBotController(
+        public ChordsController(
             ITelegramBotClient botClient, 
-            ICollection<IChordsFinder> chordsFinders)
+            IChordsService chordsService,
+            IChordsFormatter chordsFormatter)
         {
             _botClient = botClient;
-            _chordsFinders = chordsFinders;
+            _chordsService = chordsService;
+            _chordsFormatter = chordsFormatter;
         }
 
         [HttpPost]
-        [Route("init")]
         public async Task<string> Init(string telegramToken)
         {
             var webHookUrl = Url.RouteUrl("webHook", new { telegramToken }, Request.Scheme, Request.Host.ToString());
@@ -37,18 +40,13 @@ namespace ChordsBot.Api.Controllers
         }
 
         [HttpGet]
-        [Route("test")]
         public async Task<string> Test(string query)
         {
-            var result = await await Task.WhenAny(_chordsFinders.Select(x => x.FindChords(query)));
-            var finalResult = string.Empty;
+            var link = await _chordsService.FindFirst(query);
+            var chords = await link.Bind(x => _chordsService.Get(x));
+            var result = link.Bind(x => chords.Bind(y => _chordsFormatter.Format(x, y).Return()));
 
-            result.Match(
-                x => finalResult = x,
-                x => finalResult = x
-            );
-
-            return finalResult;
+            return result.ToString();
         }
 
         [HttpPost]
@@ -57,12 +55,12 @@ namespace ChordsBot.Api.Controllers
         {
             if (update.Type == UpdateType.MessageUpdate)
             {
-                var text = update.Message.Text;
-
-                var result = await await Task.WhenAny(_chordsFinders.Select(x => x.FindChords(text)));
+                var text = update.Message.Text;                
+                var link = await _chordsService.FindFirst(text);
+                var chords = await link.Bind(x => _chordsService.Get(x));
                 var chatId = update.Message.Chat.Id;
 
-                await result.Match(
+                await chords.Match(
                     async x => await _botClient.SendTextMessageAsync(chatId, x), 
                     async x => await _botClient.SendTextMessageAsync(chatId, "Can't find song.")
                 );

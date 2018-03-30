@@ -28,34 +28,59 @@ namespace Parser.Common
             return _value != null ? await func(_value) : await Task.FromResult(Result<TO>.Error(_errorMessage));
         }
 
-        public void Match(Action<T> result, Action<string> error)
-        {
+        public void MatchResult(Action<T> result)
+        {            
             if (result == null) throw new ArgumentNullException(nameof(result));
-            if (error == null) throw new ArgumentNullException(nameof(error));
-
             if (_value != null)
             {
                 result(_value);
             }
-            else
+        }
+
+        public async Task MatchResult(Func<T, Task> result)
+        {
+            if (result == null) throw new ArgumentNullException(nameof(result));
+            if (_value != null)
+            {
+                await result(_value);
+            }
+        }
+
+        public void MatchError(Action<string> error)
+        {            
+            if (error == null) throw new ArgumentNullException(nameof(error));
+            if (_value == null)
             {
                 error(_errorMessage);
             }
         }
 
-        public async Task Match(Func<T, Task> result, Func<string, Task> error)
+        public async Task MatchError(Func<string, Task> error)
         {
-            if (result == null) throw new ArgumentNullException(nameof(result));
             if (error == null) throw new ArgumentNullException(nameof(error));
-
-            if (_value != null)
-            {
-                await result(_value);
-            }
-            else
+            if (_value == null)
             {
                 await error(_errorMessage);
             }
+        }
+
+        public void Match(Action<T> result, Action<string> error)
+        {         
+            MatchResult(result);
+            MatchError(error);
+        }
+
+        public async Task Match(Func<T, Task> result, Func<string, Task> error)
+        {
+            await MatchResult(result);
+            await MatchError(error);
+        }
+
+        public override string ToString() 
+        {
+            return _value != null
+                ? _value.ToString() 
+                : _errorMessage;
         }
 
         public static Result<T> Error(string errorMessage) => 

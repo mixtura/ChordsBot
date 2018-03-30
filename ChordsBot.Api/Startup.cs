@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Parser.Implementation.EChords;
+using Parser.Implementation;
 using Parser.Interfaces;
 using Telegram.Bot;
 
@@ -32,10 +32,12 @@ namespace ChordsBot.Api
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token));
-            services.AddSingleton<ICollection<IChordsFinder>>(new List<IChordsFinder>
-            {
-                new EChordsFinder()
-            });
+            services.AddSingleton<IChordsService, ChordsService>();
+            services.AddSingleton<IWebPageLoader, DefaultWebPageLoader>();
+            services.AddSingleton<IChordsGrabber, EChordsGrabber>();
+            services.AddSingleton<IChordsFormatter, ChordsFormatter>();
+            services.AddSingleton<IReadOnlyCollection<IChordsGrabber>>(
+                x => x.GetServices<IChordsGrabber>().ToList());
 
             services
                 .AddMvcCore()

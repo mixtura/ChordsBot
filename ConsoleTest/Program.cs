@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Parser.Implementation.EChords;
+using Parser.Implementation;
+using Parser.Interfaces;
 
 namespace ConsoleTest
 {
@@ -23,11 +25,25 @@ namespace ConsoleTest
 
         private static async Task FindAndPrintChords(string query)
         {
-            var finder = new EChordsFinder();
-            var result = await finder.FindChords(query);
+            var service = GetService();
+            var result = await service.FindFirst(query);
             var print = (Action<string>) Console.WriteLine;
 
-            result.Match(print, print);
+            await result.MatchResult(async x => 
+            {
+                var chords = await service.Get(x);                
+                
+                chords.Match(print, print);
+            });
+        }
+
+        private static IChordsService GetService() 
+        {            
+            var loader = new DefaultWebPageLoader();
+            var grabbers = new List<IChordsGrabber> { new EChordsGrabber(loader) };
+            var service = new ChordsService(grabbers);
+
+            return service;
         }
     }
 }
