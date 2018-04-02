@@ -24,7 +24,7 @@ namespace ChordsBot.Implementation
             var searchUrl = new Uri(_echordsUrl, $"/search-all/{query}");
             var page = await _webPageLoader.Load(searchUrl);
 
-            return page.Bind(ToSafe(ExtractLinks));            
+            return page.Bind(ToSafe(ExtractLinks));
         }
 
         public async Task<Result<string>> GrabChords(Uri url) 
@@ -36,56 +36,71 @@ namespace ChordsBot.Implementation
 
         public bool CanGrab(Uri origin) => _echordsUrl == origin;
 
-        private Result<List<ChordsLink>> ExtractLinks(string content)
+        private List<ChordsLink> ExtractLinks(string content)
         {            
             var document = new HtmlDocument();
 
             document.LoadHtml(content);
 
-            var links = document.GetElementbyId("results").ChildNodes
+            var linkNodes = document.GetElementbyId("results").ChildNodes
                 .Where(x => x.Name == "li")
                 .SelectMany(x => x.ChildNodes)
                 .Where(x => x.HasClass("lista"))
-                .Select(NodeToChordsLink)
-                .ToList()
-                .Return();
+                .ToList();
+
+            var links = new List<ChordsLink>();
+            
+            foreach (var linkNode in linkNodes)
+            {
+                if (TryGetChordsLink(linkNode, out ChordsLink chordsLink))
+                {
+                    links.Add(chordsLink);
+                }
+            }
 
             return links;
         }
 
-        private ChordsLink NodeToChordsLink(HtmlNode node) 
+        private bool TryGetChordsLink(HtmlNode node, out ChordsLink chordsLink) 
         {
             var children = node.ChildNodes;
+            var linkNode = children.Single(child => child.HasClass("types")).ChildNodes
+                .SingleOrDefault(x => x.HasClass("ta"));
             var nameNode = children.Single(child => child.HasClass("h1")).ChildNodes
                 .Single(child => child.Name == "a");
             var authorNode = children.Single(child => child.HasClass("h2")).ChildNodes
                 .Single(child => child.Name == "a");
-
-            var url = nameNode.GetAttributeValue("href", "");
+            
+            var url = linkNode?.GetAttributeValue("href", string.Empty);
             var name = nameNode.InnerText;
             var author = authorNode.InnerText;
-            
-            return new ChordsLink(_echordsUrl, new Uri(url), name, author);
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                chordsLink = null;
+                return false;
+            }
+
+            chordsLink = new ChordsLink(_echordsUrl, new Uri(url), name, author);
+            return true;
         }
 
-        private Result<string> ExtractChords(string content)
+        private static string ExtractChords(string content)
         {
             var document = new HtmlDocument();
 
             document.LoadHtml(content);
 
-            return document
-                .GetElementbyId("core")?.InnerText
-                .Return();
+            return document.GetElementbyId("core")?.InnerText;
         }
 
-        private static Func<string, Result<T>> ToSafe<T>(Func<string, Result<T>> func)
+        private static Func<string, Result<T>> ToSafe<T>(Func<string, T> func)
         {
             return content =>
             {
                 try
                 {
-                    return func(content);
+                    return func(content).Return();
                 }
                 catch (Exception ex)
                 {

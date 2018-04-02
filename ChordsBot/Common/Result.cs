@@ -23,9 +23,9 @@ namespace ChordsBot.Common
             return _value != null ? func(_value) : Result<TO>.Error(_errorMessage);
         }
 
-        public async Task<Result<TO>> Bind<TO>(Func<T, Task<Result<TO>>> func)
+        public Task<Result<TO>> Bind<TO>(Func<T, Task<Result<TO>>> func)
         {
-            return _value != null ? await func(_value) : await Task.FromResult(Result<TO>.Error(_errorMessage));
+            return _value != null ? func(_value) : Task.FromResult(Result<TO>.Error(_errorMessage));
         }
 
         public void MatchResult(Action<T> result)
@@ -91,7 +91,7 @@ namespace ChordsBot.Common
 
     public static class ResultExtensions
     {
-        public static Result<T> Return<T>(this T value) where T : class
+        public static Result<T> Return<T>(this T value)
         {
             return value != null ? new Result<T>(value) : Result<T>.Error(string.Empty);
         }

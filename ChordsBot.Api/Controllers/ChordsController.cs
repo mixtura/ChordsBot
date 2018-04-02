@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using ChordsBot.Common;
 using ChordsBot.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -48,23 +50,41 @@ namespace ChordsBot.Api.Controllers
         }
 
         [HttpPost]
-        [Route("webhook/{telegramToken}", Name = "webHook")]
-        public async Task WebHook(string telegramToken, Update update)
+        [Route("{telegramToken}", Name = "webHook")]
+        public async Task WebHook(string telegramToken, [FromBody]Update update)
+        {
+            await ProcessUpdate(update);
+        }
+
+        private async Task ProcessUpdate(Update update)
         {
             if (update.Type == UpdateType.MessageUpdate)
             {
-                var text = update.Message.Text;                
-                var link = await _chordsService.FindFirst(text);
-                var chords = await link.Bind(x => _chordsService.Get(x));
+                var text = update.Message.Text;
                 var chatId = update.Message.Chat.Id;
 
-                await chords.Match(
-                    async x => await _botClient.SendTextMessageAsync(chatId, x), 
-                    async x => await _botClient.SendTextMessageAsync(chatId, "Can't find song.")
+                var link = await _chordsService.FindFirst(text);
+                var chords = await link.Bind(x => _chordsService.Get(x));
+                var result = link.Bind(x => 
+                    chords.Bind(y => 
+                        ToTextFile($"{x.SongAuthor} - {x.SongName}", y).Return()
+                    ));
+
+                await result.Match(
+                    async file => await _botClient.SendDocumentAsync(chatId, file),
+                    async error => await _botClient.SendTextMessageAsync(chatId, error)
                 );
             }
         }
-        
+
+        private static FileToSend ToTextFile(string name, string content)
+        {
+            var byteArray = Encoding.UTF8.GetBytes(content);
+            var stream = new MemoryStream(byteArray);
+
+            return new FileToSend($"{name}.txt", stream);
+        }
+
         private async Task InitWebHook(string webHookUrl)
         {
             var info = await _botClient.GetWebhookInfoAsync();

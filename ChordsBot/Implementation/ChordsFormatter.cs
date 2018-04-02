@@ -13,14 +13,14 @@ namespace ChordsBot.Implementation
             return $"{header} \n {body}";
         }
 
-        private string GetHeader(ChordsLink link)
+        private static string GetHeader(ChordsLink link)
         {            
             return $"{link.SongAuthor} - {link.SongName} \n" 
                 + $"Origin: {link.Origin} \n"
                 + $"Url: {link.Url} \n";            
         }
 
-        private string GetBody(string chords) 
+        private static string GetBody(string chords) 
         {
             return chords;
         }

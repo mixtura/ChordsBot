@@ -61,7 +61,7 @@ namespace ChordsBot.Implementation
             return await _chordsGrabbers
                 .Where(x => x.CanGrab(chordsLInk.Origin))
                 .Take(1)
-                .Select(async x => await x.GrabChords(chordsLInk.Url))
+                .Select(x => x.GrabChords(chordsLInk.Url))
                 .Aggregate(error, (x, y) => y);
         }
     }

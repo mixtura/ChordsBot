@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Net.Http.Headers;
+using Newtonsoft.Json;
 using Telegram.Bot;
 
 namespace ChordsBot.Api
@@ -35,9 +37,13 @@ namespace ChordsBot.Api
                 .AddMvcCore()
                 .AddApiExplorer()
                 .AddAuthorization()
-                .AddFormatterMappings()
+                .AddFormatterMappings(x => 
+                    x.SetMediaTypeMappingForFormat("json", MediaTypeHeaderValue.Parse("application/json"))
+                )
                 .AddDataAnnotations()
-                .AddJsonFormatters();
+                .AddJsonFormatters(x => 
+                    x.NullValueHandling = NullValueHandling.Ignore
+                );
 
             services.AddScheme<TelegramTokenOptions, TelegramTokenHandler>(
                 "TelegramAuthScheme",
