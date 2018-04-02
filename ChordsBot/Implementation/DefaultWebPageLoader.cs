@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Parser.Common;
-using Parser.Interfaces;
+using ChordsBot.Common;
+using ChordsBot.Interfaces;
 
-namespace Parser.Implementation
+namespace ChordsBot.Implementation
 {
     public class DefaultWebPageLoader : IWebPageLoader
     {

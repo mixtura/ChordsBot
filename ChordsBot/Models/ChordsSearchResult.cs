@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using Parser.Common;
 
-namespace Parser.Models
+namespace ChordsBot.Models
 {
     public class ChordsSearchResults
     {

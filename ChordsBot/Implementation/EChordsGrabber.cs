@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
+using ChordsBot.Common;
+using ChordsBot.Interfaces;
+using ChordsBot.Models;
 using HtmlAgilityPack;
-using Parser.Common;
-using Parser.Interfaces;
-using Parser.Models;
 
-namespace Parser.Implementation
+namespace ChordsBot.Implementation
 {
     public class EChordsGrabber : IChordsGrabber
     {        

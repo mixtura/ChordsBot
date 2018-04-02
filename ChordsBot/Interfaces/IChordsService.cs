@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
-using Parser.Common;
-using Parser.Models;
+using ChordsBot.Common;
+using ChordsBot.Models;
 
-namespace Parser.Interfaces
+namespace ChordsBot.Interfaces
 {
     public interface IChordsService
     {

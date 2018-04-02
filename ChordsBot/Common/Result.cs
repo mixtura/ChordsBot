@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Parser.Common
+namespace ChordsBot.Common
 {
     public class Result<T>
     {

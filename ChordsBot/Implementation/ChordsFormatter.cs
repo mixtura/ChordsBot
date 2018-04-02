@@ -1,11 +1,7 @@
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Parser.Common;
-using Parser.Interfaces;
-using Parser.Models;
+using ChordsBot.Interfaces;
+using ChordsBot.Models;
 
-namespace Parser.Implementation
+namespace ChordsBot.Implementation
 {
     public class ChordsFormatter : IChordsFormatter
     {

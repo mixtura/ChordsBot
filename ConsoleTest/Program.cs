@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Parser.Implementation;
-using Parser.Interfaces;
+using ChordsBot.Implementation;
+using ChordsBot.Interfaces;
 
 namespace ConsoleTest
 {

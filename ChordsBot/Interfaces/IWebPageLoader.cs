@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using Parser.Common;
+using ChordsBot.Common;
 
-namespace Parser.Interfaces
+namespace ChordsBot.Interfaces
 {
     public interface IWebPageLoader
     {

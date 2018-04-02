@@ -1,18 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
-using Parser.Common;
-using Parser.Interfaces;
-using Parser.Models;
+using ChordsBot.Common;
+using ChordsBot.Interfaces;
+using ChordsBot.Models;
 
-namespace Parser.Implementation
+namespace ChordsBot.Implementation
 {
     public class ChordsService : IChordsService
     {
-        private IReadOnlyCollection<IChordsGrabber> _chordsGrabbers; 
+        private readonly IReadOnlyCollection<IChordsGrabber> _chordsGrabbers; 
 
         public ChordsService(IReadOnlyCollection<IChordsGrabber> chordsGrabbers) 
         {
@@ -52,8 +50,8 @@ namespace Parser.Implementation
                     break;
                 }
             }
-            
-            return finalResult.Aggregate(error, (x, y) => x = y.Return());
+
+            return finalResult.Aggregate(error, (x, y) => y.Return());
         }
 
         public async Task<Result<string>> Get(ChordsLink chordsLInk)
@@ -64,7 +62,7 @@ namespace Parser.Implementation
                 .Where(x => x.CanGrab(chordsLInk.Origin))
                 .Take(1)
                 .Select(async x => await x.GrabChords(chordsLInk.Url))
-                .Aggregate(error, (x, y) => x = y);
+                .Aggregate(error, (x, y) => y);
         }
     }
 }
