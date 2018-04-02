@@ -28,7 +28,8 @@ namespace ChordsBot.Api
             services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token));
             services.AddSingleton<IChordsService, ChordsService>();
             services.AddSingleton<IWebPageLoader, DefaultWebPageLoader>();
-            services.AddSingleton<IChordsGrabber, EChordsGrabber>();
+            // services.AddSingleton<IChordsGrabber, EChordsGrabber>();
+            services.AddSingleton<IChordsGrabber, MyChordsGrabber>();
             services.AddSingleton<IChordsFormatter, ChordsFormatter>();
             services.AddSingleton<IReadOnlyCollection<IChordsGrabber>>(
                 x => x.GetServices<IChordsGrabber>().ToList());
