@@ -1,8 +1,10 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ChordsBot.Api.Interfaces;
 using ChordsBot.Common;
@@ -24,8 +26,8 @@ namespace ChordsBot.Api.Implementation
             public const string Txt = "txt";
         }
 
-        private const string SelectCommandName = "select_";
-        private const string SetFormatCommand = "setFormat";
+        private const string SelectCommandName = "select";
+        private const string SetFormatCommandName = "setFormat";
         private const int MaxResultsForInlineSearch = 50;
 
         private static readonly IDictionary<long, string> FormatMapping;
@@ -38,7 +40,7 @@ namespace ChordsBot.Api.Implementation
         static BotUpdateProcessor()
         {
             FormatMapping = new ConcurrentDictionary<long, string>();
-            Cache = new ConcurrentDictionary<string, ChordsSearchResults>();
+            Cache = new ConcurrentDictionary<string, ChordsSearchResults>(StringComparer.CurrentCultureIgnoreCase);
         }
 
         public BotUpdateProcessor(
@@ -89,7 +91,7 @@ namespace ChordsBot.Api.Implementation
                     ThumbUrl = x.Thumbnail.ToString(),
                     InputMessageContent = new InputTextMessageContent
                     {
-                        MessageText = $"/{SelectCommandName}{cacheKey}_{index}"
+                        MessageText = $"/{SelectCommandName} {cacheKey}_{index}"
                     }
                 });
 
@@ -124,7 +126,7 @@ namespace ChordsBot.Api.Implementation
                     break;
                 }
 
-                case SetFormatCommand:
+                case SetFormatCommandName:
                 {
                     ProcessSetFormatCommand(command, chatId);
                     break;
@@ -136,9 +138,13 @@ namespace ChordsBot.Api.Implementation
 
         private async Task ProcessSelectCommand(string command, long chatId)
         {
-            var (index, cacheKey) = ParseSelectCommand(command);
+            var parsedCommand = ParseSelectCommand(command);
 
-            var link = Cache.GetAsResult(cacheKey).Bind(x => x.Results.GetByIndexAsResult(index));
+            var link = parsedCommand.Bind(c => 
+                Cache.GetAsResult(c.cacheKey).Bind(x => 
+                    x.Results.GetByIndexAsResult(c.index))
+            );
+
             var chords = await link.Bind(x => _chordsService.Get(x));
 
             await SendChords(link, chords, chatId);
@@ -178,8 +184,8 @@ namespace ChordsBot.Api.Implementation
             );
 
             await result.Match(
-                text => _botClient.SendTextMessageAsync(chatId, text),
-                err => _botClient.SendTextMessageAsync(chatId, err, ParseMode.Default, true)
+                text => _botClient.SendTextMessageAsync(chatId, text, ParseMode.Default, true),
+                err => _botClient.SendTextMessageAsync(chatId, err)
             );
         }
 
@@ -206,12 +212,21 @@ namespace ChordsBot.Api.Implementation
             );
         }
 
-        private static (int index, string cacheKey) ParseSelectCommand(string command)
+        private static Result<(int index, string cacheKey)> ParseSelectCommand(string command)
         {
-            var index = int.Parse(command.Substring(command.LastIndexOf('_') + 1));
-            var cacheKey = command.Substring(SelectCommandName.Length, command.LastIndexOf('_') - SelectCommandName.Length);
+            const string commandError = "can't understand command";
+            var pattern = $@"{SelectCommandName} (\w+)_(\d+)";
+            var match = Regex.Match(command, pattern);
 
-            return (index, cacheKey);
+            if (!match.Success)
+            {
+                return Result<(int index, string cacheKey)>.Error(commandError);
+            }
+
+            var cacheKey = match.Groups[1].Value;
+            var index = int.Parse(match.Groups[2].Value);
+
+            return (index, cacheKey).Return();
         }
 
         private static string ParseSetFormatCommand(string command)

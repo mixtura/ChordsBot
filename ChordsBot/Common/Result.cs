@@ -100,7 +100,7 @@ namespace ChordsBot.Common
 
         public static Result<T> GetAsResult<TKey, T>(this IDictionary<TKey, T> dictionary, TKey key)
         {
-            return dictionary.ContainsKey(key) 
+            return key != null && dictionary.ContainsKey(key)
                 ? dictionary[key].Return() 
                 : Result<T>.Error("key not found");
         }
