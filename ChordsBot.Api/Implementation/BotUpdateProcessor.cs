@@ -50,7 +50,6 @@ namespace ChordsBot.Api.Implementation
                 {
                     await ProcessMessageUpdate(update);
                     break;
-                    
                 }
             }
         }
@@ -80,24 +79,23 @@ namespace ChordsBot.Api.Implementation
             var inlineQueryId = update.InlineQuery.Id;
             var cacheKey = string.Join('_', text.Split(' '));
 
-            var result = Cache.ContainsKey(cacheKey)
-                ? Cache[cacheKey]
-                : await _chordsService.FindChords(text);
+            var result = !Cache.ContainsKey(cacheKey)
+                ? Cache[cacheKey] = await _chordsService.FindChords(text)
+                : Cache[cacheKey];
 
-            Cache[cacheKey] = result;
-
-            var inlineQueryResults = result.Results.Take(50).Select((x, index) => new InlineQueryResultContact
-            {
-                Id = index.ToString(),
-                Title = x.SongName,
-                PhoneNumber = x.SongAuthor,
-                FirstName = x.SongName,
-                ThumbUrl = x.Thumbnail.ToString(),
-                InputMessageContent = new InputTextMessageContent
+            var inlineQueryResults = result.Results.Take(50)
+                .Select((x, index) => new InlineQueryResultContact
                 {
-                    MessageText = $"/{SelectCommandName}{cacheKey}_{index}"
-                }
-            }).ToArray();
+                    Id = index.ToString(),
+                    Title = x.SongName,
+                    PhoneNumber = x.SongAuthor,
+                    FirstName = x.SongName,
+                    ThumbUrl = x.Thumbnail.ToString(),
+                    InputMessageContent = new InputTextMessageContent
+                    {
+                        MessageText = $"/{SelectCommandName}{cacheKey}_{index}"
+                    }
+                }).ToArray();
 
             await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults);
         }
@@ -126,34 +124,35 @@ namespace ChordsBot.Api.Implementation
             await SendFile(chordsFile, chatId);
         }
 
-        private static (int index, string cacheKey) ParseSelectCommand(string command)
-        {
-            var index = int.Parse(command.Substring(command.LastIndexOf('_') + 1));
-            var cacheKey = command.Substring(SelectCommandName.Length, command.LastIndexOf('_') - SelectCommandName.Length);
-
-            return (index, cacheKey);
-        }
-
-        private async Task SendFile(Result<FileToSend?> file, long chatId)
-        {
-            await file.Match(
-                async f => await _botClient.SendDocumentAsync(chatId, f ?? default(FileToSend)),
-                async er => await _botClient.SendTextMessageAsync(chatId, er)
-            );
-        }
-
         private Result<FileToSend?> ToChordsFileResult(Result<ChordsLink> link, Result<string> chords)
         {
             var result = link.Bind(l =>
                 chords.Bind(c =>
                 {
                     var formattedChords = _chordsFormatter.Format(l, c);
+                    var fileName = $"{l.SongAuthor} - {l.SongName}";
 
-                    return ToTextFile($"{l.SongAuthor} - {l.SongName}", formattedChords).Return();
+                    return ToTextFile(fileName, formattedChords).Return();
                 })
             );
 
             return result;
+        }
+
+        private async Task SendFile(Result<FileToSend?> file, long chatId)
+        {
+            await file.Match(
+                async f => await _botClient.SendDocumentAsync(chatId, f ?? default(FileToSend)),
+                async err => await _botClient.SendTextMessageAsync(chatId, err)
+            );
+        }
+
+        private static (int index, string cacheKey) ParseSelectCommand(string command)
+        {
+            var index = int.Parse(command.Substring(command.LastIndexOf('_') + 1));
+            var cacheKey = command.Substring(SelectCommandName.Length, command.LastIndexOf('_') - SelectCommandName.Length);
+
+            return (index, cacheKey);
         }
 
         private static FileToSend? ToTextFile(string name, string content)

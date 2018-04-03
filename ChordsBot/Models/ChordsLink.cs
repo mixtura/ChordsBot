@@ -9,8 +9,8 @@ namespace ChordsBot.Models
             Thumbnail = thumbnail ?? throw new ArgumentNullException(nameof(thumbnail));
             Origin = origin ?? throw new ArgumentNullException(nameof(origin));
             Url = url ?? throw new ArgumentNullException(nameof(url)); 
-            SongName = songName ?? throw new ArgumentNullException(nameof(songName));
-            SongAuthor = songAuthor ?? throw new ArgumentNullException(nameof(songAuthor));
+            SongName = GuardStringValue(songName, nameof(songName));
+            SongAuthor = GuardStringValue(songAuthor, nameof(songAuthor));
         }
 
         public string Id => Url.ToString();
@@ -19,5 +19,12 @@ namespace ChordsBot.Models
         public Uri Url { get; }
         public string SongName { get; }
         public string SongAuthor { get; }
+
+        private static string GuardStringValue(string value, string name)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? throw new ArgumentException($"{name} can't be null or white space")
+                : value;
+        }
     }
 }

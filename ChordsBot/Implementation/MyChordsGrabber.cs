@@ -47,15 +47,19 @@ namespace ChordsBot.Implementation
                 .Descendants("a")
                 .Where(x => x.HasClass("b-listing__item__link"))
                 .Select(x => {
+                    // TODO: need to wrap this in Result, so that if error happens then it won't fail whole search
                     var url = new Uri(_mychordsUrl, x.GetAttributeValue("href", ""));
-                    var names =  x.InnerText
+                    var names = x.InnerText
                         .Split('–', '-')
                         .Select(n => n.Trim('\n', '\t', ' '))
                         .ToArray();
 
-                    return new ChordsLink(_mychordsUrl, _thumbnail, url, names[1], names[0]);
+                    var songName = names.Length > 1 ? names[1] : names[0];
+                    var authorName = names.Length > 1 ? names[0] : "Unknown";
+
+                    return new ChordsLink(_mychordsUrl, _thumbnail, url, songName, authorName);
                 });
-                
+
             return links.ToList();
         }
         private static string ExtractChords(string content)

@@ -59,12 +59,14 @@ namespace ChordsBot.Api.Controllers
         
         private async Task InitWebHook(string webHookUrl)
         {
-            var info = await _botClient.GetWebhookInfoAsync();
+            var webHookInfo = await _botClient.GetWebhookInfoAsync();
 
-            if (string.IsNullOrEmpty(info.Url))
+            if (!string.IsNullOrEmpty(webHookInfo.Url))
             {
-                await _botClient.SetWebhookAsync(webHookUrl);
+                await _botClient.DeleteWebhookAsync();
             }
+
+            await _botClient.SetWebhookAsync(webHookUrl);
         }
     }
 }
