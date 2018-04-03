@@ -18,13 +18,28 @@ namespace ChordsBot.Api.Implementation
 {
     public class BotUpdateProcessor : IBotUpdateProcessor
     {
+        private static class Format
+        {
+            public const string Message = "message";
+            public const string Txt = "txt";
+        }
+
         private const string SelectCommandName = "select_";
-        private static readonly IDictionary<string, ChordsSearchResults> Cache
-            = new ConcurrentDictionary<string, ChordsSearchResults>();
+        private const string SetFormatCommand = "setFormat";
+        private const int MaxResultsForInlineSearch = 50;
+
+        private static readonly IDictionary<long, string> FormatMapping;
+        private static readonly IDictionary<string, ChordsSearchResults> Cache;
 
         private readonly ITelegramBotClient _botClient;
         private readonly IChordsService _chordsService;
         private readonly IChordsFormatter _chordsFormatter;
+
+        static BotUpdateProcessor()
+        {
+            FormatMapping = new ConcurrentDictionary<long, string>();
+            Cache = new ConcurrentDictionary<string, ChordsSearchResults>();
+        }
 
         public BotUpdateProcessor(
             ITelegramBotClient botClient, 
@@ -53,6 +68,33 @@ namespace ChordsBot.Api.Implementation
                 }
             }
         }
+        
+        private async Task ProcessInlineQueryUpdate(Update update)
+        {
+            var text = update.InlineQuery.Query;
+            var inlineQueryId = update.InlineQuery.Id;
+            var cacheKey = string.Join('_', text.Split(' '));
+
+            var result = !Cache.ContainsKey(cacheKey)
+                ? Cache[cacheKey] = await _chordsService.FindChords(text)
+                : Cache[cacheKey];
+
+            var inlineQueryResults = result.Results.Take(MaxResultsForInlineSearch)
+                .Select((x, index) => new InlineQueryResultContact
+                {
+                    Id = index.ToString(),
+                    Title = x.SongName,
+                    PhoneNumber = x.SongAuthor,
+                    FirstName = x.SongName,
+                    ThumbUrl = x.Thumbnail.ToString(),
+                    InputMessageContent = new InputTextMessageContent
+                    {
+                        MessageText = $"/{SelectCommandName}{cacheKey}_{index}"
+                    }
+                });
+
+            await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults.ToArray());
+        }
 
         private async Task ProcessMessageUpdate(Update update)
         {
@@ -67,37 +109,9 @@ namespace ChordsBot.Api.Implementation
             {
                 var link = await _chordsService.FindFirst(text);
                 var chords = await link.Bind(x => _chordsService.Get(x));
-                var chordsFile = ToChordsFileResult(link, chords);
 
-                await SendFile(chordsFile, chatId);
+                await SendChords(link, chords, chatId);
             }
-        }
-
-        private async Task ProcessInlineQueryUpdate(Update update)
-        {
-            var text = update.InlineQuery.Query;
-            var inlineQueryId = update.InlineQuery.Id;
-            var cacheKey = string.Join('_', text.Split(' '));
-
-            var result = !Cache.ContainsKey(cacheKey)
-                ? Cache[cacheKey] = await _chordsService.FindChords(text)
-                : Cache[cacheKey];
-
-            var inlineQueryResults = result.Results.Take(50)
-                .Select((x, index) => new InlineQueryResultContact
-                {
-                    Id = index.ToString(),
-                    Title = x.SongName,
-                    PhoneNumber = x.SongAuthor,
-                    FirstName = x.SongName,
-                    ThumbUrl = x.Thumbnail.ToString(),
-                    InputMessageContent = new InputTextMessageContent
-                    {
-                        MessageText = $"/{SelectCommandName}{cacheKey}_{index}"
-                    }
-                }).ToArray();
-
-            await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults);
         }
 
         private async Task ProcessCommand(string command, long chatId)
@@ -109,6 +123,14 @@ namespace ChordsBot.Api.Implementation
                     await ProcessSelectCommand(command, chatId);
                     break;
                 }
+
+                case SetFormatCommand:
+                {
+                    ProcessSetFormatCommand(command, chatId);
+                    break;
+                }
+
+                // more commands here
             }
         }
 
@@ -119,15 +141,52 @@ namespace ChordsBot.Api.Implementation
             var link = Cache.GetAsResult(cacheKey).Bind(x => x.Results.GetByIndexAsResult(index));
             var chords = await link.Bind(x => _chordsService.Get(x));
 
-            var chordsFile = ToChordsFileResult(link, chords);
-
-            await SendFile(chordsFile, chatId);
+            await SendChords(link, chords, chatId);
         }
 
-        private Result<FileToSend?> ToChordsFileResult(Result<ChordsLink> link, Result<string> chords)
+        private static void ProcessSetFormatCommand(string command, long chatId)
+        {
+            var format = ParseSetFormatCommand(command);
+
+            FormatMapping[chatId] = format;
+        }
+
+        private async Task SendChords(Result<ChordsLink> chordsLink, Result<string> chordsText, long chatId)
+        {
+            var format = FormatMapping.ContainsKey(chatId) ? FormatMapping[chatId] : Format.Message;
+
+            switch (format)
+            {
+                case Format.Message:
+                {
+                    await SendChordsAsMessage(chordsLink, chordsText, chatId);
+                    break;
+                }
+
+                case Format.Txt:
+                {
+                    await SendChordsAsFile(chordsLink, chordsText, chatId);
+                    break;
+                }
+            }
+        }
+
+        private async Task SendChordsAsMessage(Result<ChordsLink> chordsLink, Result<string> chordsText, long chatId)
+        {
+            var result = chordsLink.Bind(l => 
+                chordsText.Bind(c => _chordsFormatter.Format(l, c).Return())
+            );
+
+            await result.Match(
+                text => _botClient.SendTextMessageAsync(chatId, text),
+                err => _botClient.SendTextMessageAsync(chatId, err, ParseMode.Default, true)
+            );
+        }
+
+        private async Task SendChordsAsFile(Result<ChordsLink> link, Result<string> chordsText, long chatId)
         {
             var result = link.Bind(l =>
-                chords.Bind(c =>
+                chordsText.Bind(c =>
                 {
                     var formattedChords = _chordsFormatter.Format(l, c);
                     var fileName = $"{l.SongAuthor} - {l.SongName}";
@@ -136,14 +195,14 @@ namespace ChordsBot.Api.Implementation
                 })
             );
 
-            return result;
+            await SendFile(result, chatId);
         }
 
         private async Task SendFile(Result<FileToSend?> file, long chatId)
         {
             await file.Match(
-                async f => await _botClient.SendDocumentAsync(chatId, f ?? default(FileToSend)),
-                async err => await _botClient.SendTextMessageAsync(chatId, err)
+                f => _botClient.SendDocumentAsync(chatId, f ?? default(FileToSend)),
+                err => _botClient.SendTextMessageAsync(chatId, err)
             );
         }
 
@@ -153,6 +212,11 @@ namespace ChordsBot.Api.Implementation
             var cacheKey = command.Substring(SelectCommandName.Length, command.LastIndexOf('_') - SelectCommandName.Length);
 
             return (index, cacheKey);
+        }
+
+        private static string ParseSetFormatCommand(string command)
+        {
+            return command.Split(' ').LastOrDefault() ?? Format.Message;
         }
 
         private static FileToSend? ToTextFile(string name, string content)
