@@ -4,8 +4,9 @@ namespace ChordsBot.Models
 {
     public class ChordsLink
     {
-        public ChordsLink(Uri origin, Uri url, string songName, string songAuthor) 
+        public ChordsLink(Uri origin, Uri thumbnail, Uri url, string songName, string songAuthor)
         {
+            Thumbnail = thumbnail ?? throw new ArgumentNullException(nameof(thumbnail));
             Origin = origin ?? throw new ArgumentNullException(nameof(origin));
             Url = url ?? throw new ArgumentNullException(nameof(url)); 
             SongName = songName ?? throw new ArgumentNullException(nameof(songName));
@@ -13,6 +14,7 @@ namespace ChordsBot.Models
         }
 
         public string Id => Url.ToString();
+        public Uri Thumbnail { get; set; }
         public Uri Origin { get; }
         public Uri Url { get; }
         public string SongName { get; }

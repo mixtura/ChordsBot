@@ -13,6 +13,8 @@ namespace ChordsBot.Api
         public static IWebHost BuildWebHost(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
                 .UseStartup<Startup>()
+                .UseApplicationInsights()
+                .UseAzureAppServices()
                 .Build();
     }
 }

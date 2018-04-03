@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ChordsBot.Common
@@ -94,6 +96,20 @@ namespace ChordsBot.Common
         public static Result<T> Return<T>(this T value)
         {
             return value != null ? new Result<T>(value) : Result<T>.Error(string.Empty);
+        }
+
+        public static Result<T> GetAsResult<TKey, T>(this IDictionary<TKey, T> dictionary, TKey key)
+        {
+            return dictionary.ContainsKey(key) 
+                ? dictionary[key].Return() 
+                : Result<T>.Error("key not found");
+        }
+
+        public static Result<T> GetByIndexAsResult<T>(this ICollection<T> collection, int index)
+        {
+            return collection.Count > index 
+                ? collection.ElementAt(index).Return() 
+                : Result<T>.Error("item not found");
         }
     }
 }

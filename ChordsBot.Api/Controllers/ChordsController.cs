@@ -1,13 +1,11 @@
-﻿using System.IO;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using ChordsBot.Api.Interfaces;
 using ChordsBot.Common;
 using ChordsBot.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Telegram.Bot;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 
 namespace ChordsBot.Api.Controllers
 {
@@ -18,15 +16,18 @@ namespace ChordsBot.Api.Controllers
         private readonly ITelegramBotClient _botClient;
         private readonly IChordsService _chordsService;
         private readonly IChordsFormatter _chordsFormatter;
+        private readonly IBotUpdateProcessor _botUpdateProcessor;
         
         public ChordsController(
             ITelegramBotClient botClient, 
             IChordsService chordsService,
-            IChordsFormatter chordsFormatter)
+            IChordsFormatter chordsFormatter,
+            IBotUpdateProcessor botUpdateProcessor)
         {
             _botClient = botClient;
             _chordsService = chordsService;
             _chordsFormatter = chordsFormatter;
+            _botUpdateProcessor = botUpdateProcessor;
         }
 
         [HttpPost]
@@ -53,38 +54,9 @@ namespace ChordsBot.Api.Controllers
         [Route("{telegramToken}", Name = "webHook")]
         public async Task WebHook(string telegramToken, [FromBody]Update update)
         {
-            await ProcessUpdate(update);
+            await _botUpdateProcessor.Process(update);
         }
-
-        private async Task ProcessUpdate(Update update)
-        {
-            if (update.Type == UpdateType.MessageUpdate)
-            {
-                var text = update.Message.Text;
-                var chatId = update.Message.Chat.Id;
-
-                var link = await _chordsService.FindFirst(text);
-                var chords = await link.Bind(x => _chordsService.Get(x));
-                var result = link.Bind(x => 
-                    chords.Bind(y => 
-                        ToTextFile($"{x.SongAuthor} - {x.SongName}", y).Return()
-                    ));
-
-                await result.Match(
-                    async file => await _botClient.SendDocumentAsync(chatId, file),
-                    async error => await _botClient.SendTextMessageAsync(chatId, error)
-                );
-            }
-        }
-
-        private static FileToSend ToTextFile(string name, string content)
-        {
-            var byteArray = Encoding.UTF8.GetBytes(content);
-            var stream = new MemoryStream(byteArray);
-
-            return new FileToSend($"{name}.txt", stream);
-        }
-
+        
         private async Task InitWebHook(string webHookUrl)
         {
             var info = await _botClient.GetWebhookInfoAsync();

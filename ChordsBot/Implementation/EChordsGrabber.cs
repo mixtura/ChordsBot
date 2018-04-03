@@ -12,6 +12,7 @@ namespace ChordsBot.Implementation
     public class EChordsGrabber : IChordsGrabber
     {        
         private readonly Uri _echordsUrl = new Uri("https://www.e-chords.com");
+        private readonly Uri _thumbnail = new Uri("https://pbs.twimg.com/profile_images/3003366372/5505c019c3712bf71678151405f96e51_400x400.jpeg");
         private readonly IWebPageLoader _webPageLoader;
 
         public EChordsGrabber(IWebPageLoader webPageLoader) 
@@ -81,7 +82,7 @@ namespace ChordsBot.Implementation
                 return false;
             }
 
-            chordsLink = new ChordsLink(_echordsUrl, new Uri(url), name, author);
+            chordsLink = new ChordsLink(_echordsUrl, _thumbnail, new Uri(url), name, author);
             return true;
         }
 

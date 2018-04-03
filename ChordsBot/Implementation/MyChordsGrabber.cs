@@ -12,6 +12,7 @@ namespace ChordsBot.Implementation
     public class MyChordsGrabber : IChordsGrabber
     {        
         private readonly Uri _mychordsUrl = new Uri("https://mychords.net");
+        private readonly Uri _thumbnail = new Uri("https://mychords.net/i/img/head/logo_image_src.png");
         private readonly IWebPageLoader _webPageLoader;
 
         public MyChordsGrabber(IWebPageLoader webPageLoader) 
@@ -52,7 +53,7 @@ namespace ChordsBot.Implementation
                         .Select(n => n.Trim('\n', '\t', ' '))
                         .ToArray();
 
-                    return new ChordsLink(_mychordsUrl, url, names[1], names[0]);
+                    return new ChordsLink(_mychordsUrl, _thumbnail, url, names[1], names[0]);
                 });
                 
             return links.ToList();
