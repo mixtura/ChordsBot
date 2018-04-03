@@ -91,7 +91,7 @@ namespace ChordsBot.Api.Implementation
                     ThumbUrl = x.Thumbnail.ToString(),
                     InputMessageContent = new InputTextMessageContent
                     {
-                        MessageText = $"/{SelectCommandName} {cacheKey}_{index}"
+                        MessageText = $"/{SelectCommandName} {cacheKey} {index}"
                     }
                 });
 
@@ -215,7 +215,7 @@ namespace ChordsBot.Api.Implementation
         private static Result<(int index, string cacheKey)> ParseSelectCommand(string command)
         {
             const string commandError = "can't understand command";
-            var pattern = $@"{SelectCommandName} (\w+)_(\d+)";
+            var pattern = $@"{SelectCommandName} ([a-zA-Zа-яА-Я0-9_-]+) (\d+)";
             var match = Regex.Match(command, pattern);
 
             if (!match.Success)
