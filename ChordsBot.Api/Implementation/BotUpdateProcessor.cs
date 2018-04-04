@@ -45,9 +45,7 @@ namespace ChordsBot.Api.Implementation
         }
 
         public BotUpdateProcessor(
-            ITelegramBotClient botClient, 
-            IChordsService chordsService, 
-            IChordsFormatter chordsFormatter)
+            ITelegramBotClient botClient, IChordsService chordsService, IChordsFormatter chordsFormatter)
         {
             _botClient = botClient;
             _chordsService = chordsService;
@@ -59,19 +57,15 @@ namespace ChordsBot.Api.Implementation
             switch (update.Type)
             {
                 case UpdateType.InlineQueryUpdate:
-                {
                     await ProcessInlineQueryUpdate(update);
                     break;
-                }
 
                 case UpdateType.MessageUpdate:
-                {
                     await ProcessMessageUpdate(update);
                     break;
-                }
             }
         }
-        
+
         private async Task ProcessInlineQueryUpdate(Update update)
         {
             var text = update.InlineQuery.Query;
@@ -96,7 +90,7 @@ namespace ChordsBot.Api.Implementation
                     }
                 });
 
-            await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults.ToArray());
+            await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults.ToArray<InlineQueryResult>());
         }
 
         private async Task ProcessMessageUpdate(Update update)
@@ -113,7 +107,7 @@ namespace ChordsBot.Api.Implementation
                 var link = await _chordsService.FindFirst(text);
                 var chords = await link.Bind(x => _chordsService.Get(x));
 
-                await SendChords(link, chords, chatId);
+                await SendChords(chords, chatId);
             }
         }
 
@@ -122,18 +116,14 @@ namespace ChordsBot.Api.Implementation
             switch (command)
             {
                 case var commandTest when commandTest.StartsWith(SelectCommandName):
-                {
                     await ProcessSelectCommand(command, chatId);
                     break;
-                }
 
                 case var commandTest when commandTest.StartsWith(SetFormatCommandName):
-                {
-                    ProcessSetFormatCommand(command, chatId);
+                    await ProcessSetFormatCommand(command, chatId);
                     break;
-                }
 
-                // more commands here
+                    // more commands here
             }
         }
 
@@ -141,66 +131,60 @@ namespace ChordsBot.Api.Implementation
         {
             var parsedCommand = ParseSelectCommand(command);
 
-            var link = parsedCommand.Bind(c => 
-                Cache.GetAsResult(c.cacheKey).Bind(x => 
+            var link = parsedCommand.Bind(c =>
+                Cache.GetAsResult(c.cacheKey).Bind(x =>
                     x.Results.GetByIndexAsResult(c.index))
             );
 
             var chords = await link.Bind(x => _chordsService.Get(x));
 
-            await SendChords(link, chords, chatId);
+            await SendChords(chords, chatId);
         }
 
-        private static void ProcessSetFormatCommand(string command, long chatId)
+        private async Task ProcessSetFormatCommand(string command, long chatId)
         {
             var format = ParseSetFormatCommand(command);
 
             FormatMapping[chatId] = format;
+
+            await _botClient.SendTextMessageAsync(chatId, "format was updated");
         }
 
-        private async Task SendChords(Result<ChordsLink> chordsLink, Result<string> chordsText, long chatId)
+        private async Task SendChords(Result<Chords> chords, long chatId)
         {
-            var format = FormatMapping.ContainsKey(chatId) ? FormatMapping[chatId] : Format.Message;
+            var format = FormatMapping.ContainsKey(chatId)
+                ? FormatMapping[chatId]
+                : Format.Message;
 
             switch (format)
             {
                 case Format.Message:
-                {
-                    await SendChordsAsMessage(chordsLink, chordsText, chatId);
+                    await SendChordsAsMessage(chords, chatId);
                     break;
-                }
 
                 case Format.Txt:
-                {
-                    await SendChordsAsFile(chordsLink, chordsText, chatId);
+                    await SendChordsAsFile(chords, chatId);
                     break;
-                }
             }
         }
 
-        private async Task SendChordsAsMessage(Result<ChordsLink> chordsLink, Result<string> chordsText, long chatId)
+        private async Task SendChordsAsMessage(Result<Chords> chords, long chatId)
         {
-            var result = chordsLink.Bind(l => 
-                chordsText.Bind(c => _chordsFormatter.Format(l, c).Return())
-            );
-
-            await result.Match(
-                text => _botClient.SendTextMessageAsync(chatId, text, ParseMode.Default, true),
+            await chords.Match(
+                c => _botClient.SendTextMessageAsync(chatId, c.RawChords, ParseMode.Default, true),
                 err => _botClient.SendTextMessageAsync(chatId, err)
             );
         }
 
-        private async Task SendChordsAsFile(Result<ChordsLink> link, Result<string> chordsText, long chatId)
+        private async Task SendChordsAsFile(Result<Chords> chords, long chatId)
         {
-            var result = link.Bind(l =>
-                chordsText.Bind(c =>
-                {
-                    var formattedChords = _chordsFormatter.Format(l, c);
-                    var fileName = $"{l.SongAuthor} - {l.SongName}";
+            var result = chords.Bind(c =>
+            {
+                var formattedChords = _chordsFormatter.Format(c);
+                var fileName = $"{c.SourceLink.SongAuthor} - {c.SourceLink.SongName}";
 
-                    return ToTextFile(fileName, formattedChords).Return();
-                })
-            );
+                return ToTextFile(fileName, formattedChords).Return();
+            });
 
             await SendFile(result, chatId);
         }

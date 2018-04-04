@@ -8,6 +8,6 @@ namespace ChordsBot.Interfaces
     {
         Task<ChordsSearchResults> FindChords(string query);
         Task<Result<ChordsLink>> FindFirst(string query);
-        Task<Result<string>> Get(ChordsLink chordsLInk);
+        Task<Result<Chords>> Get(ChordsLink chordsLInk);
     }
 }

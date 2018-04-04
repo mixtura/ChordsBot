@@ -45,7 +45,7 @@ namespace ChordsBot.Api.Controllers
         {
             var link = await _chordsService.FindFirst(query);
             var chords = await link.Bind(x => _chordsService.Get(x));
-            var result = link.Bind(x => chords.Bind(y => _chordsFormatter.Format(x, y).Return()));
+            var result = chords.Bind(x => _chordsFormatter.Format(x).Return());
 
             return result.ToString();
         }

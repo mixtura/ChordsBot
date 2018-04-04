@@ -5,10 +5,10 @@ namespace ChordsBot.Implementation
 {
     public class ChordsFormatter : IChordsFormatter
     {
-        public string Format(ChordsLink link, string chords)
+        public string Format(Chords chords)
         {
-            var header = GetHeader(link);
-            var body = GetBody(chords);
+            var header = GetHeader(chords.SourceLink);
+            var body = GetBody(chords.RawChords);
 
             return $"{header} \n {body}";
         }

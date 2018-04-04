@@ -54,14 +54,17 @@ namespace ChordsBot.Implementation
             return finalResult.Aggregate(error, (x, y) => y.Return());
         }
 
-        public async Task<Result<string>> Get(ChordsLink chordsLInk)
+        public async Task<Result<Chords>> Get(ChordsLink chordsLInk)
         {
-            var error = Task.FromResult(Result<string>.Error("invalid link"));
+            var error = Task.FromResult(Result<Chords>.Error("invalid link"));
 
             return await _chordsGrabbers
                 .Where(x => x.CanGrab(chordsLInk.Origin))
                 .Take(1)
-                .Select(x => x.GrabChords(chordsLInk.Url))
+                .Select(async x => (await x.GrabChords(chordsLInk.Url))
+                    .Bind(y => new Chords(y, chordsLInk)
+                    .Return())
+                )
                 .Aggregate(error, (x, y) => y);
         }
     }
