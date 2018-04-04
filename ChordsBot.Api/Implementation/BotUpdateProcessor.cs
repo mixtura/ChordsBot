@@ -29,6 +29,7 @@ namespace ChordsBot.Api.Implementation
         private const string SelectCommandName = "select";
         private const string SetFormatCommandName = "setFormat";
         private const int MaxResultsForInlineSearch = 50;
+        private const int MessageMaxLength = 4096;
 
         private static readonly IDictionary<long, string> FormatMapping;
         private static readonly IDictionary<string, ChordsSearchResults> Cache;
@@ -120,13 +121,13 @@ namespace ChordsBot.Api.Implementation
         {
             switch (command)
             {
-                case var x when x.StartsWith(SelectCommandName):
+                case var commandTest when commandTest.StartsWith(SelectCommandName):
                 {
                     await ProcessSelectCommand(command, chatId);
                     break;
                 }
 
-                case SetFormatCommandName:
+                case var commandTest when commandTest.StartsWith(SetFormatCommandName):
                 {
                     ProcessSetFormatCommand(command, chatId);
                     break;
