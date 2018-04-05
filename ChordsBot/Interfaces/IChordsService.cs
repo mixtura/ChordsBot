@@ -7,7 +7,7 @@ namespace ChordsBot.Interfaces
     public interface IChordsService
     {
         Task<ChordsSearchResults> FindChords(string query);
-        Task<Result<ChordsLink>> FindFirst(string query);
-        Task<Result<Chords>> Get(ChordsLink chordsLInk);
+        Task<IResult<ChordsLink>> FindFirst(string query);
+        Task<IResult<Chords>> Get(ChordsLink chordsLInk);
     }
 }

@@ -20,61 +20,66 @@ namespace ChordsBot.Api.Implementation
 {
     public class BotUpdateProcessor : IBotUpdateProcessor
     {
-        private static class Format
+        private enum Format
         {
-            public const string Message = "message";
-            public const string Txt = "txt";
+            Message,
+            Txt
         }
+
+        private static readonly IDictionary<long, Format> FormatMapping;
 
         private const string SelectCommandName = "select";
         private const string SetFormatCommandName = "setFormat";
         private const int MaxResultsForInlineSearch = 50;
         private const int MessageMaxLength = 4096;
 
-        private static readonly IDictionary<long, string> FormatMapping;
-        private static readonly IDictionary<string, ChordsSearchResults> Cache;
-
         private readonly ITelegramBotClient _botClient;
-        private readonly IChordsService _chordsService;
         private readonly IChordsFormatter _chordsFormatter;
+        private readonly IChordsService _chordsService;
 
         static BotUpdateProcessor()
         {
-            FormatMapping = new ConcurrentDictionary<long, string>();
-            Cache = new ConcurrentDictionary<string, ChordsSearchResults>(StringComparer.CurrentCultureIgnoreCase);
+            FormatMapping = new ConcurrentDictionary<long, Format>();
         }
 
         public BotUpdateProcessor(
-            ITelegramBotClient botClient, IChordsService chordsService, IChordsFormatter chordsFormatter)
+            ITelegramBotClient botClient,              
+            IChordsFormatter chordsFormatter,
+            Func<IChordsService> chordsServiceFactory)
         {
             _botClient = botClient;
-            _chordsService = chordsService;
             _chordsFormatter = chordsFormatter;
+            _chordsService = chordsServiceFactory();
         }
 
         public async Task Process(Update update)
         {
+            var answer = await GetAnswer(update);
+
+            await answer();
+        }
+
+        public async Task<Func<Task>> GetAnswer(Update update)
+        {
             switch (update.Type)
             {
                 case UpdateType.InlineQueryUpdate:
-                    await ProcessInlineQueryUpdate(update);
-                    break;
+                    return await GetInlineQueryAnswer(update.InlineQuery);
 
                 case UpdateType.MessageUpdate:
-                    await ProcessMessageUpdate(update);
-                    break;
+                    return await GetMessageAnswer(update.Message);
+
+                default:
+                    return () => Task.FromResult(0); // ignore
             }
         }
 
-        private async Task ProcessInlineQueryUpdate(Update update)
+        private async Task<Func<Task>> GetInlineQueryAnswer(InlineQuery inlineQuery)
         {
-            var text = update.InlineQuery.Query;
-            var inlineQueryId = update.InlineQuery.Id;
-            var cacheKey = string.Join('_', text.Split(' '));
+            var query = inlineQuery.Query;
+            var inlineQueryId = inlineQuery.Id;
 
-            var result = !Cache.ContainsKey(cacheKey)
-                ? Cache[cacheKey] = await _chordsService.FindChords(text)
-                : Cache[cacheKey];
+            var result = await _chordsService.FindChords(query);
 
             var inlineQueryResults = result.Results.Take(MaxResultsForInlineSearch)
                 .Select((x, index) => new InlineQueryResultContact
@@ -86,71 +91,75 @@ namespace ChordsBot.Api.Implementation
                     ThumbUrl = x.Thumbnail.ToString(),
                     InputMessageContent = new InputTextMessageContent
                     {
-                        MessageText = $"/{SelectCommandName} {cacheKey} {index}"
+                        MessageText = $"/{SelectCommandName} '{query}' {index}"
                     }
                 });
 
-            await _botClient.AnswerInlineQueryAsync(inlineQueryId, inlineQueryResults.ToArray<InlineQueryResult>());
+            return () => _botClient.AnswerInlineQueryAsync(
+                inlineQueryId, inlineQueryResults.ToArray<InlineQueryResult>());
         }
 
-        private async Task ProcessMessageUpdate(Update update)
+        private async Task<Func<Task>> GetMessageAnswer(Message message)
         {
-            var text = update.Message.Text;
-            var chatId = update.Message.Chat.Id;
+            var text = message.Text;
+            var chatId = message.Chat.Id;
 
-            if (text.StartsWith('/'))
-            {
-                await ProcessCommand(text.TrimStart('/'), chatId);
-            }
-            else
-            {
-                var link = await _chordsService.FindFirst(text);
-                var chords = await link.Bind(x => _chordsService.Get(x));
+            var answer = text.StartsWith('/')
+                ? await GetCommandAnswer(text.TrimStart('/'), chatId)
+                : await GetFirstChordsAnswer(text, chatId);
 
-                await SendChords(chords, chatId);
-            }
+            return () => answer.Match(x => x(), x => _botClient.SendTextMessageAsync(chatId, x));
         }
 
-        private async Task ProcessCommand(string command, long chatId)
+        private async Task<IResult<Func<Task>>> GetFirstChordsAnswer(string query, long chatId)
+        {
+            var link = await _chordsService.FindFirst(query);
+            var chords = await link.Bind(x => _chordsService.Get(x));
+
+            return chords.Bind(x => SendChordsFn(x, chatId).Return());
+        }
+
+        private async Task<IResult<Func<Task>>> GetCommandAnswer(string command, long chatId)
         {
             switch (command)
             {
                 case var commandTest when commandTest.StartsWith(SelectCommandName):
-                    await ProcessSelectCommand(command, chatId);
-                    break;
+                    return await GetSelectCommandAnswer(command, chatId);
 
                 case var commandTest when commandTest.StartsWith(SetFormatCommandName):
-                    await ProcessSetFormatCommand(command, chatId);
-                    break;
+                    return GetSetFormatCommandAnswer(command, chatId);
 
-                    // more commands here
+                default:
+                    return Result<Func<Task>>.Error("wrong command");
             }
         }
 
-        private async Task ProcessSelectCommand(string command, long chatId)
+        private async Task<IResult<Func<Task>>> GetSelectCommandAnswer(string command, long chatId)
         {
-            var parsedCommand = ParseSelectCommand(command);
+            var args = ParseSelectCommandArgs(command.Replace(SelectCommandName, string.Empty));
 
-            var link = parsedCommand.Bind(c =>
-                Cache.GetAsResult(c.cacheKey).Bind(x =>
-                    x.Results.GetByIndexAsResult(c.index))
-            );
+            var link = await args.Bind(async x => {
+                var result = await _chordsService.FindChords(x.query);
+                return result.Results.GetByIndexAsResult(x.index);
+            });
 
             var chords = await link.Bind(x => _chordsService.Get(x));
 
-            await SendChords(chords, chatId);
+            return chords.Bind(x => SendChordsFn(x, chatId).Return());
         }
 
-        private async Task ProcessSetFormatCommand(string command, long chatId)
+        private IResult<Func<Task>> GetSetFormatCommandAnswer(string command, long chatId)
         {
-            var format = ParseSetFormatCommand(command);
+            var args = command.Replace(SetFormatCommandName, string.Empty);
 
-            FormatMapping[chatId] = format;
-
-            await _botClient.SendTextMessageAsync(chatId, "format was updated");
+            return ParseSetFormatCommandArgs(args).Bind(x =>
+            {
+                FormatMapping[chatId] = x;
+                return SendMessageFn("format was updated", chatId).Return();
+            });
         }
 
-        private async Task SendChords(Result<Chords> chords, long chatId)
+        private Func<Task> SendChordsFn(Chords chords, long chatId)
         {
             var format = FormatMapping.ContainsKey(chatId)
                 ? FormatMapping[chatId]
@@ -159,67 +168,77 @@ namespace ChordsBot.Api.Implementation
             switch (format)
             {
                 case Format.Message:
-                    await SendChordsAsMessage(chords, chatId);
-                    break;
+                    return SendMessageFn(chords.RawChords, chatId);
 
                 case Format.Txt:
-                    await SendChordsAsFile(chords, chatId);
-                    break;
+                    return SendChordsAsFileFn(chords, chatId);
+
+                default:
+                    return SendMessageFn(chords.RawChords, chatId);
             }
         }
 
-        private async Task SendChordsAsMessage(Result<Chords> chords, long chatId)
+        private Func<Task> SendChordsAsFileFn(Chords chords, long chatId)
         {
-            await chords.Match(
-                c => _botClient.SendTextMessageAsync(chatId, c.RawChords, ParseMode.Default, true),
-                err => _botClient.SendTextMessageAsync(chatId, err)
-            );
+            var formattedChords = _chordsFormatter.Format(chords);
+            var fileName = $"{chords.SourceLink.SongAuthor} - {chords.SourceLink.SongName}";
+
+            var txtFile = ToTextFile(fileName, formattedChords);
+
+            return SendFileFn(txtFile, chatId);
         }
 
-        private async Task SendChordsAsFile(Result<Chords> chords, long chatId)
-        {
-            var result = chords.Bind(c =>
+        private Func<Task> SendMessageFn(string message, long chatId) =>
+            () =>
             {
-                var formattedChords = _chordsFormatter.Format(c);
-                var fileName = $"{c.SourceLink.SongAuthor} - {c.SourceLink.SongName}";
+                var tasks = message.ChunksUpTo(MessageMaxLength) 
+                    .Select(x => _botClient.SendTextMessageAsync(chatId, x, ParseMode.Default, true));
 
-                return ToTextFile(fileName, formattedChords).Return();
-            });
+                return Task.WhenAll(tasks);
+            };
 
-            await SendFile(result, chatId);
-        }
+        private Func<Task> SendFileFn(FileToSend file, long chatId) =>
+            () => _botClient.SendDocumentAsync(chatId, file);
 
-        private async Task SendFile(Result<FileToSend?> file, long chatId)
+        private static IResult<(int index, string query)> ParseSelectCommandArgs(string args)
         {
-            await file.Match(
-                f => _botClient.SendDocumentAsync(chatId, f ?? default(FileToSend)),
-                err => _botClient.SendTextMessageAsync(chatId, err)
-            );
-        }
-
-        private static Result<(int index, string cacheKey)> ParseSelectCommand(string command)
-        {
-            const string commandError = "can't understand command";
-            var pattern = $@"{SelectCommandName} ([a-zA-Zа-яА-Я0-9_-]+) (\d+)";
-            var match = Regex.Match(command, pattern);
+            const string pattern = @" '(.+)' (\d+)";
+            var error = GetCommandArgsError(SelectCommandName);
+            var match = Regex.Match(args, pattern);
 
             if (!match.Success)
             {
-                return Result<(int index, string cacheKey)>.Error(commandError);
+                return Result<(int index, string query)>.Error(error);
             }
 
-            var cacheKey = match.Groups[1].Value;
+            var query = match.Groups[1].Value;
             var index = int.Parse(match.Groups[2].Value);
 
-            return (index, cacheKey).Return();
+            return (index, query).Return();
         }
 
-        private static string ParseSetFormatCommand(string command)
+        private static IResult<Format> ParseSetFormatCommandArgs(string args)
         {
-            return command.Split(' ').LastOrDefault() ?? Format.Message;
+            const string pattern = @" (\w+)";
+            var error = GetCommandArgsError(SetFormatCommandName);
+            var match = Regex.Match(args, pattern);
+
+            if (!match.Success)
+            {
+                return Result<Format>.Error(error);
+            }
+
+            var format = match.Groups[1].Value;
+
+            return Enum.TryParse(format, true, out Format parsedFormat) 
+                ? parsedFormat.Return() 
+                : Result<Format>.Error(error);
         }
 
-        private static FileToSend? ToTextFile(string name, string content)
+        private static string GetCommandArgsError(string commandName) 
+            => $"{commandName} command has wrong arguments";
+
+        private static FileToSend ToTextFile(string name, string content)
         {
             var byteArray = Encoding.UTF8.GetBytes(content);
             var stream = new MemoryStream(byteArray);

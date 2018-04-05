@@ -8,7 +8,7 @@ namespace ChordsBot.Implementation
 {
     public class DefaultWebPageLoader : IWebPageLoader
     {
-        public async Task<Result<string>> Load(Uri url)
+        public async Task<IResult<string>> Load(Uri url)
         {
             using (var httpClient = new HttpClient())
             {

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using ChordsBot.Api.Implementation;
 using ChordsBot.Api.Interfaces;
@@ -27,15 +28,6 @@ namespace ChordsBot.Api
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddApplicationInsightsTelemetry();
-            services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token));
-            services.AddSingleton<IBotUpdateProcessor, BotUpdateProcessor>();
-            services.AddSingleton<IChordsService, ChordsService>();
-            services.AddSingleton<IWebPageLoader, DefaultWebPageLoader>();
-            services.AddSingleton<IChordsGrabber, EChordsGrabber>();
-            services.AddSingleton<IChordsGrabber, MyChordsGrabber>();
-            services.AddSingleton<IChordsFormatter, ChordsFormatter>();
-            services.AddSingleton<IReadOnlyCollection<IChordsGrabber>>(
-                x => x.GetServices<IChordsGrabber>().ToList());
 
             var mvcBuilder = services.AddMvcCore();
 
@@ -53,6 +45,21 @@ namespace ChordsBot.Api
                 "TelegramAuthScheme",
                 options => { options.Token = Token; }
             );
+            
+            // app services
+            services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Token));
+            services.AddSingleton<IBotUpdateProcessor, BotUpdateProcessor>();
+            services.AddSingleton<IChordsService, ChordsService>();
+            services.AddSingleton<IWebPageLoader, DefaultWebPageLoader>();
+            services.AddSingleton<IChordsGrabber, EChordsGrabber>();
+            services.AddSingleton<IChordsGrabber, MyChordsGrabber>();
+            services.AddSingleton<IChordsFormatter, ChordsFormatter>();
+
+            services.AddSingleton<IReadOnlyCollection<IChordsGrabber>>(
+                x => x.GetServices<IChordsGrabber>().ToList());
+
+            services.AddSingleton<Func<IChordsService>>(x =>
+                () => new ChordsServiceCacheProxy(x.GetService<IChordsService>()));
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)

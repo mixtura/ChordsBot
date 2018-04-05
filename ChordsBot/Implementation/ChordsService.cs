@@ -19,42 +19,33 @@ namespace ChordsBot.Implementation
 
         public async Task<ChordsSearchResults> FindChords(string query)
         {
+            var results = await Task.WhenAll(_chordsGrabbers.Select(x => x.GrabLinks(query)).ToArray());
             var finalResult = new List<ChordsLink>();
 
-            // can I get rid of side effect? should I?
-            foreach(var grabber in _chordsGrabbers) 
+            foreach (var result in results)
             {
-                var links = await grabber.GrabLinks(query);
-
-                links.MatchResult(x => finalResult.AddRange(x));
+                result.MatchResult(x => finalResult.AddRange(x));
             }
 
-            return new ChordsSearchResults(finalResult, DateTime.UtcNow);
+            return new ChordsSearchResults(query, finalResult, DateTime.UtcNow);
         }
 
-        public async Task<Result<ChordsLink>> FindFirst(string query)
-        {            
-            var finalResult = new List<ChordsLink>();
+        public async Task<IResult<ChordsLink>> FindFirst(string query)
+        { 
             var error = Result<ChordsLink>.Error("chords not found");
+            var tasks = _chordsGrabbers.Select(x => x.GrabLinks(query)).ToList();
 
-            // can I get rid of side effect? should I?
-            foreach(var grabber in _chordsGrabbers) 
+            if (!tasks.Any())
             {
-                var links = await grabber.GrabLinks(query);
-
-                // critical. could be error otherwise
-                links.MatchResult(x => finalResult.AddRange(x.Take(1)));
-
-                if(finalResult.Any())
-                {
-                    break;
-                }
+                return error;
             }
 
-            return finalResult.Aggregate(error, (x, y) => y.Return());
+            var result = await GetFirst(tasks.First(), tasks.Skip(1).ToList());
+
+            return result;
         }
 
-        public async Task<Result<Chords>> Get(ChordsLink chordsLInk)
+        public async Task<IResult<Chords>> Get(ChordsLink chordsLInk)
         {
             var error = Task.FromResult(Result<Chords>.Error("invalid link"));
 
@@ -66,6 +57,22 @@ namespace ChordsBot.Implementation
                     .Return())
                 )
                 .Aggregate(error, (x, y) => y);
+        }
+
+        private static async Task<IResult<ChordsLink>> GetFirst(Task<IResult<List<ChordsLink>>> task,
+            IList<Task<IResult<List<ChordsLink>>>> rest)
+        {
+            var result = await task;
+            var singleResult = result.Bind(x => x.FirstOrDefault().Return());
+
+            if (!rest.Any())
+            {
+                return singleResult;
+            }
+
+            return singleResult.ContainsValue
+                ? singleResult
+                : await GetFirst(rest.First(), rest.Skip(1).ToList());
         }
     }
 }

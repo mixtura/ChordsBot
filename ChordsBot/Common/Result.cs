@@ -5,10 +5,33 @@ using System.Threading.Tasks;
 
 namespace ChordsBot.Common
 {
-    public class Result<T>
+    public interface IResult<out T>
+    {
+        bool ContainsValue { get; }
+        
+        IResult<TO> Bind<TO>(Func<T, IResult<TO>> func);
+        
+        Task<IResult<TO>> Bind<TO>(Func<T, Task<IResult<TO>>> func);
+        
+        void MatchResult(Action<T> result);
+        
+        Task MatchResult(Func<T, Task> result);
+        
+        void MatchError(Action<string> error);
+        
+        Task MatchError(Func<string, Task> error);
+        
+        void Match(Action<T> result, Action<string> error);
+
+        Task Match(Func<T, Task> result, Func<string, Task> error);
+    }
+
+    public class Result<T> : IResult<T>
     {
         private readonly T _value;
         private readonly string _errorMessage;
+
+        public bool ContainsValue => _value != null && _errorMessage == null;
 
         public Result(T someValue)
         {
@@ -20,18 +43,18 @@ namespace ChordsBot.Common
             _errorMessage = errorMessage;
         }
 
-        public Result<TO> Bind<TO>(Func<T, Result<TO>> func)
+        public IResult<TO> Bind<TO>(Func<T, IResult<TO>> func)
         {
-            return _value != null ? func(_value) : Result<TO>.Error(_errorMessage);
+            return ContainsValue ? func(_value) : Result<TO>.Error(_errorMessage);
         }
 
-        public Task<Result<TO>> Bind<TO>(Func<T, Task<Result<TO>>> func)
+        public Task<IResult<TO>> Bind<TO>(Func<T, Task<IResult<TO>>> func)
         {
-            return _value != null ? func(_value) : Task.FromResult(Result<TO>.Error(_errorMessage));
+            return ContainsValue ? func(_value) : Task.FromResult(Result<TO>.Error(_errorMessage));
         }
 
         public void MatchResult(Action<T> result)
-        {            
+        {
             if (result == null) throw new ArgumentNullException(nameof(result));
             if (_value != null)
             {
@@ -42,7 +65,7 @@ namespace ChordsBot.Common
         public async Task MatchResult(Func<T, Task> result)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
-            if (_value != null)
+            if (ContainsValue)
             {
                 await result(_value);
             }
@@ -51,7 +74,7 @@ namespace ChordsBot.Common
         public void MatchError(Action<string> error)
         {            
             if (error == null) throw new ArgumentNullException(nameof(error));
-            if (_value == null)
+            if (!ContainsValue)
             {
                 error(_errorMessage);
             }
@@ -60,7 +83,7 @@ namespace ChordsBot.Common
         public async Task MatchError(Func<string, Task> error)
         {
             if (error == null) throw new ArgumentNullException(nameof(error));
-            if (_value == null)
+            if (!ContainsValue)
             {
                 await error(_errorMessage);
             }
@@ -80,12 +103,12 @@ namespace ChordsBot.Common
 
         public override string ToString() 
         {
-            return _value != null
+            return ContainsValue
                 ? _value.ToString() 
                 : _errorMessage;
         }
 
-        public static Result<T> Error(string errorMessage) => 
+        public static IResult<T> Error(string errorMessage) => 
             errorMessage == null 
             ? throw new ArgumentNullException(nameof(errorMessage)) 
             : new Result<T>(errorMessage);
@@ -93,23 +116,32 @@ namespace ChordsBot.Common
 
     public static class ResultExtensions
     {
-        public static Result<T> Return<T>(this T value)
+        public static IResult<T> Return<T>(this T value)
         {
             return value != null ? new Result<T>(value) : Result<T>.Error(string.Empty);
         }
 
-        public static Result<T> GetAsResult<TKey, T>(this IDictionary<TKey, T> dictionary, TKey key)
+        public static IResult<T> GetAsResult<TKey, T>(this IDictionary<TKey, T> dictionary, TKey key)
         {
             return key != null && dictionary.ContainsKey(key)
                 ? dictionary[key].Return() 
                 : Result<T>.Error("key not found");
         }
 
-        public static Result<T> GetByIndexAsResult<T>(this ICollection<T> collection, int index)
+        public static IResult<T> GetByIndexAsResult<T>(this ICollection<T> collection, int index)
         {
             return collection.Count > index 
                 ? collection.ElementAt(index).Return() 
                 : Result<T>.Error("item not found");
+        }
+
+        public static IEnumerable<T> Unwrap<T>(this IResult<IEnumerable<T>> values)
+        {
+            var result = Enumerable.Empty<T>();
+
+            values.MatchResult(x => result = x);
+
+            return result;
         }
     }
 }

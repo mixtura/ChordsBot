@@ -8,8 +8,8 @@ namespace ChordsBot.Interfaces
 {
     public interface IChordsGrabber
     {
-        Task<Result<List<ChordsLink>>> GrabLinks(string query);
-        Task<Result<string>> GrabChords(Uri url);
+        Task<IResult<List<ChordsLink>>> GrabLinks(string query);
+        Task<IResult<string>> GrabChords(Uri url);
         bool CanGrab(Uri origin);
     }
 }

@@ -6,6 +6,6 @@ namespace ChordsBot.Interfaces
 {
     public interface IWebPageLoader
     {
-        Task<Result<string>> Load(Uri url);
+        Task<IResult<string>> Load(Uri url);
     }
 }

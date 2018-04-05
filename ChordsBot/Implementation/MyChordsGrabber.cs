@@ -20,7 +20,7 @@ namespace ChordsBot.Implementation
             _webPageLoader = webPageLoader ?? throw new ArgumentNullException(nameof(webPageLoader));
         }
 
-        public async Task<Result<List<ChordsLink>>> GrabLinks(string query) 
+        public async Task<IResult<List<ChordsLink>>> GrabLinks(string query) 
         {            
             var searchUrl = new Uri(_mychordsUrl, $"/search?q={query}");
             var page = await _webPageLoader.Load(searchUrl);
@@ -28,7 +28,7 @@ namespace ChordsBot.Implementation
             return page.Bind(ToSafe(ExtractLinks));
         }
 
-        public async Task<Result<string>> GrabChords(Uri url) 
+        public async Task<IResult<string>> GrabChords(Uri url) 
         {
             var page = await _webPageLoader.Load(url);
 
@@ -74,7 +74,7 @@ namespace ChordsBot.Implementation
                 .InnerText;
         }
 
-        private static Func<string, Result<T>> ToSafe<T>(Func<string, T> func)
+        private static Func<string, IResult<T>> ToSafe<T>(Func<string, T> func)
         {
             return content =>
             {

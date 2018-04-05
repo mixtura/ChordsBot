@@ -56,7 +56,7 @@ namespace ChordsBot.Api.Controllers
         {
             await _botUpdateProcessor.Process(update);
         }
-        
+
         private async Task InitWebHook(string webHookUrl)
         {
             var webHookInfo = await _botClient.GetWebhookInfoAsync();
