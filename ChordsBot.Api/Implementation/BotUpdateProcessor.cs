@@ -189,13 +189,10 @@ namespace ChordsBot.Api.Implementation
         }
 
         private Func<Task> SendMessageFn(string message, long chatId) =>
-            () =>
-            {
-                var tasks = message.ChunksUpTo(MessageMaxLength) 
-                    .Select(x => _botClient.SendTextMessageAsync(chatId, x, ParseMode.Default, true));
-
-                return Task.WhenAll(tasks);
-            };
+            () => Task.WhenAll(
+                message.ChunksUpTo(MessageMaxLength)
+                    .Select(x => _botClient.SendTextMessageAsync(chatId, x, ParseMode.Default, true))
+            );
 
         private Func<Task> SendFileFn(FileToSend file, long chatId) =>
             () => _botClient.SendDocumentAsync(chatId, file);
